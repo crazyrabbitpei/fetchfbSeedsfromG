@@ -20,6 +20,7 @@ var count_seeds=0;
 var old_seeds=0;
 var new_seeds=0;
 
+var limit=0;
 var retryNum=0;
 var socket_num=0;
 /*-----------init seed, reading setting--------------*/
@@ -39,6 +40,7 @@ var serverport = service1['termServerport'];
 var serverver = service1['termServerversion'];
 var term_lan = service1['term_lan'];
 var term_requireNum = service1['term_requireNum'];
+var fetchlimit = service1['fetchlimit'];
 var termKey = service1['termKey'];
 var again_time = service1['retryTime'];
 
@@ -77,7 +79,17 @@ process.on('beforeExit',(code)=>{
             count_index=0;
             getSeeds(search_term,index);
         }
+        else if(uncaught_terms.length==0&&key_index<googlekey.length&&limit<fetchlimit){
+            console.log('limit:'+limit+' fetchlimit:'+fetchlimit);
+            count_seeds=0;
+            old_seeds=0;
+            new_seeds=0;
+            retryNum=0;
+            count_index=0;
+            getTerms(term_requireNum);
+        }
         else{
+            console.log('limit:'+limit+' fetchlimit:'+fetchlimit);
             process.exit()
         }
     });
@@ -105,6 +117,7 @@ function getTerms(num)
             if(body!=""){
                 var parts = body.split('||');
                 var i;
+                limit+=parts.length;
                 for(i=0;i<parts.length;i++){
                     uncaught_terms.push(parts[i]);
                 }

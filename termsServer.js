@@ -19,16 +19,21 @@ var HashMap = require('hashmap');
 var map_tw_address  = new HashMap();
 var processing = new HashMap();
 
-var caught_terms =  new Array();
-var uncaught_terms =  new Array();
-var caught_terms_en =  new Array();
-var uncaught_terms_en =  new Array();
+var caught_terms2file =  [];
+var caught_terms2file_en =  [];
+
+var caught_terms =  [];
+var uncaught_terms =  [];
+var caught_terms_en = [];
+var uncaught_terms_en = [];
 
 var now = new Date();
 
 var count_seeds=0;
 var old_seeds=0;
 var new_seeds=0;
+
+var currentr_uncaught_index=0;
 
 var retryNum=0;
 var socket_num=0;
@@ -40,6 +45,8 @@ var apiport = service1['termServerport'];
 var writeidInterval =  service1['writeidInterval'];
 var detectInterval =  service1['detectInterval'];
 var expire_time =  service1['expire_time'];
+var limit_requireTerm =  service1['limit_requireTerm'];
+var perReadTermsNum = service1['perReadTermsNum'];
 var termServerLog =  service1['termServerLog'];
 var search_terms_filename = service1['search_terms'];
 var termKey = service1['termKey'];
@@ -56,6 +63,7 @@ var job = new CronJob({
     cronTime:writeidInterval,
     onTick:function(){
         if(read_flag>=5){
+            console.log('Recording terms status...');
             writeTerms2file();
         }
     },
@@ -132,93 +140,46 @@ function writeSeed2file(seeds)
 function writeTerms2file()
 {
     var i;
-    var unt="",ct="",unt_en="",ct_en="";
+    var ct="",ct_en="";
     var index;
-    /*
-    for(i=0;i<uncaught_terms.length;i++){
-        index = caught_terms.indexOf(uncaught_terms[i]);
-        if(index!=-1){
-            uncaught_terms.splice(i,1);
-        }
-        else{
-            if(unt==""){
-                unt=uncaught_terms[i];
-            }
-            else{
-                unt+='\n'+uncaught_terms[i];
-            }
-        }
+    
+    for(i=0;i<caught_terms2file.length;i++){
+        ct+=caught_terms2file[i]+'\n';
+    }
+    caught_terms2file=[];
+    
+    for(i=0;i<caught_terms2file_en.length;i++){
+        ct_en+=caught_terms2file_en[i]+'\n';
 
     }
-    */
-    for(i=0;i<caught_terms.length;i++){
-        if(ct==""){
-            ct=caught_terms[i];
-        }
-        else{
-            ct+='\n'+caught_terms[i];
-        }
-    }
-    /*
-    for(i=0;i<uncaught_terms_en.length;i++){
-        index = caught_terms_en.indexOf(uncaught_terms_en[i]);
-        if(index!=-1){
-            uncaught_terms_en.splice(i,1);
-        }
-        else{
-            if(unt_en==""){
-                unt_en=uncaught_terms_en[i];
-            }
-            else{
-                unt_en+='\n'+uncaught_terms_en[i];
-            }
-        }
-
-    }
-    */
-    for(i=0;i<caught_terms_en.length;i++){
-        if(ct_en==""){
-            ct_en=caught_terms_en[i];
-        }
-        else{
-            ct_en+='\n'+caught_terms_en[i];
-        }
-
-    }
+    caught_terms2file_en=[];
     if(ct!=""){
-        fs.writeFile(search_terms_filename+'not_en/caught',ct,(err)=>{
+        fs.appendFile(search_terms_filename+'not_en/caught',ct,(err)=>{
             if(err){
                 console.log(err);
             }
-        });
-    }
-    /*
-    if(unt!=""){
-        fs.writeFile(search_terms_filename+'/not_en/uncaught',unt,(err)=>{
-            if(err){
-                console.log(err);
+            else{
+                console.log('[done] not_en/caught');
             }
         });
     }
-    */
+    else{
+        console.log('[done] not_en/caught');
+    }
 
     if(ct_en!=""){
-        fs.writeFile(search_terms_filename+'en/caught',ct_en,(err)=>{
+        fs.appendFile(search_terms_filename+'en/caught',ct_en,(err)=>{
             if(err){
                 console.log(err);
             }
-        });
-    }
-    /*
-    if(unt_en!=""){
-        fs.writeFile(search_terms_filename+'/en/uncaught',unt_en,(err)=>{
-            if(err){
-                console.log(err);
+            else{
+                console.log('[done] en/caught');
             }
         });
-
     }
-    */
+    else{
+        console.log('[done] en/caught');
+    }
 }
 function writeLog(msg,action)
 {
@@ -233,6 +194,7 @@ function writeLog(msg,action)
     });
 }
 function ReadTerms(type,lan,filename,newf,fin){
+    var index_cnt=0;
     var options = {
         //encoding: 'utf8',
         skipEmptyLines:false
@@ -251,63 +213,57 @@ function ReadTerms(type,lan,filename,newf,fin){
         console.log("error:"+err);
     });
     lr.on('line', function (line) {
-        var ischt = line.match(/[\u4e00-\u9fa5]/ig);
-        if(ischt!=null){
-            lan="not_en";
+        //console.log(line);
+        if(index_cnt==(perReadTermsNum+currentr_uncaught_index)){
+            index_cnt++;
+            currentr_uncaught_index+=perReadTermsNum;
+            console.log("index_cnt:"+index_cnt+" perReadTermsNum:"+perReadTermsNum);
+            console.log("currentr_uncaught_index:"+currentr_uncaught_index);
+            index_cnt=-1;
+            lr.close();
         }
-        else{
-            lan="en";
-        }
-
-        if(lan=="not_en"){
-            if(type=="uncaught"){
-                if(uncaught_terms.indexOf(line)==-1&&caught_terms.indexOf(line)==-1){
-                    uncaught_terms.push(line);
-                    /*
-                    fs.appendFile('./un_test.list',line+'\n',()=>{
-                        
-                    });
-                    */
+        else if(index_cnt!=-1){
+            if(line!='\n'){
+                index_cnt++;
+            }
+            if(line!='\n'&&(index_cnt>=currentr_uncaught_index)){
+                var ischt = line.match(/[\u4e00-\u9fa5]/ig);
+                if(ischt!=null){
+                    lan="not_en";
                 }
                 else{
-                    /*
-                    fs.appendFile('./ct_test.list',line+'\n',()=>{
-                        
-                    });
-                    */
+                    lan="en";
                 }
 
-            }
-            else if(type=="caught"){
-                if(caught_terms.indexOf(line)==-1){
-                    caught_terms.push(line);
+                if(lan=="not_en"){
+                    if(type=="uncaught"){
+                        if(uncaught_terms.indexOf(line)==-1&&caught_terms.indexOf(line)==-1){
+                            uncaught_terms.push(line);
+                        }
+
+                    }
+                    else if(type=="caught"){
+                        if(caught_terms.indexOf(line)==-1){
+                            caught_terms.push(line);
+                        }
+                    }
+                }
+                else if(lan=="en"){
+                    if(type=="uncaught"){
+                        if(uncaught_terms_en.indexOf(line)==-1&&caught_terms_en.indexOf(line)==-1){
+                            uncaught_terms_en.push(line);
+                        }
+                    }
+                    else if(type=="caught"){
+                        if(caught_terms_en.indexOf(line)==-1){
+                            caught_terms_en.push(line);
+                        }
+                    }
                 }
             }
         }
-        else if(lan=="en"){
-            if(type=="uncaught"){
-                if(uncaught_terms_en.indexOf(line)==-1&&caught_terms_en.indexOf(line)==-1){
-                    uncaught_terms_en.push(line);
-                    /*
-                    fs.appendFile('./un_test_en.list',line+'\n',()=>{
-                        
-                    });
-                    */
-                }
-                else{
-                    /*
-                    fs.appendFile('./ct_test_en.list',line+'\n',()=>{
-                        
-                    });
-                    */
-                }
-            }
-            else if(type=="caught"){
-                if(caught_terms_en.indexOf(line)==-1){
-                    caught_terms_en.push(line);
-                }
-            }
-        }
+
+
     });
     lr.on('end', function () {
         // All lines are read, file is closed now.
@@ -543,6 +499,7 @@ function updateTerm(terms,fin)
                 }
                 if(index2==-1){
                     caught_terms.push(status[0]);
+                    caught_terms2file.push(status[0]);
                     if(result==""){
                         result=status[0]+'~caught';
                     }
@@ -578,6 +535,7 @@ function updateTerm(terms,fin)
                 }
                 if(index2==-1){
                     caught_terms_en.push(status[0]);
+                    caught_terms2file_en.push(status[0]);
                     if(result==""){
                         result=status[0]+'~caught';
                     }
@@ -631,8 +589,10 @@ app.get('/fbjob/:key/v1.0/termbot/:action(search|update|insert|delete|show|inser
     var key = req.params.key;
     var action = req.params.action;
     var terms = req.query.terms;//allow mutiple terms=> ter1||ter2||...
-
+    /*deprecated, only allow read terms from 'uncaught' file, there's an index to record current read line.
     var filename = req.query.filename;//for localhost insertFile(terms)
+    */
+    var filename='uncaught';
     var lan = req.params.lan;//for localhost insertFile(terms)
 
     if(key!=termKey||read_flag<5||typeof action==="undefined"||(typeof terms==="undefined"&&(action!="show"&&action!="insertFile"))){
@@ -707,8 +667,8 @@ app.get('/fbjob/:key/v1.0/termbot/getTerms/:lan(en|not_en)?',function(req,res){
         res.send("illegal request");
         return;
     }
-    if(typeof num==="undefined"||num>5||num<1){
-        num=5;
+    if(typeof num==="undefined"||num>limit_requireTerm||num<1){
+        num=limit_requireTerm;
     }
     if(typeof lan==="undefined"||(lan!="en"&&lan!="not_en")){
         lan="not_en";
@@ -792,9 +752,11 @@ app.get('/fbjob/:key/v1.0/termbot/status/:action(update)',function(req,res){
                 var ischt = parts[0].match(/[\u4e00-\u9fa5]/ig);
                 if(ischt!=null){//is Asia area's words
                     caught_terms.push(parts[0]);
+                    caught_terms2file.push(parts[0]);
                 }
                 else{
                     caught_terms_en.push(parts[0]);
+                    caught_terms2file_en.push(parts[0]);
                 }
                 result=parts[0];
             }
