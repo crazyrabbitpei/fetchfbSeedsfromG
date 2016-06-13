@@ -168,10 +168,10 @@ function updateTerm(term,stat,fin)
                 process.exit(0);
             }
             if(body==""){
-                console.log('updateTerm false:'+term);
+                console.log('updateTerm to ['+stat+'] false:'+term);
             }
             else{
-                console.log('updateTerm success:'+body)
+                console.log('updateTerm to ['+stat+'] success:'+body)
             }
             fin();
         } 
