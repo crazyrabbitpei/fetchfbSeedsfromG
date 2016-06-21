@@ -13,7 +13,6 @@ var dateFormat = require('dateformat');
 var LineByLineReader = require('line-by-line');
 var HashMap = require('hashmap');
 var map_tw_address  = new HashMap();
-var now = new Date();
 
 var count_index=0;
 var count_seeds=0;
@@ -43,6 +42,7 @@ var term_requireNum = service1['term_requireNum'];
 var fetchlimit = service1['fetchlimit'];
 var termKey = service1['termKey'];
 var again_time = service1['retryTime'];
+var fetchseedsInterval = service1['fetchseedsInterval'];
 
 var serverKey = service1['serverKey'];
 var urlServerport = service1['urlServerport'];
@@ -80,7 +80,7 @@ process.on('beforeExit',(code)=>{
             getSeeds(search_term,index);
         }
         else if(uncaught_terms.length==0&&key_index<googlekey.length&&limit<fetchlimit){
-            console.log('limit:'+limit+' fetchlimit:'+fetchlimit);
+            console.log('[0] limit:'+limit+' fetchlimit:'+fetchlimit);
             count_seeds=0;
             old_seeds=0;
             new_seeds=0;
@@ -89,8 +89,15 @@ process.on('beforeExit',(code)=>{
             getTerms(term_requireNum);
         }
         else{
-            console.log('limit:'+limit+' fetchlimit:'+fetchlimit);
-            process.exit()
+            key_index=0;
+            count_seeds=0;
+            old_seeds=0;
+            new_seeds=0;
+            retryNum=0;
+            count_index=0;
+            console.log('[1] limit:'+limit+' fetchlimit:'+fetchlimit);
+            job.start()
+            //process.exit()
         }
     });
 
@@ -98,13 +105,29 @@ process.on('beforeExit',(code)=>{
 
 });
 
+var job = new CronJob({
+    cronTime:fetchseedsInterval,
+    onTick:function(){
+        var now = new Date();
+        console.log('['+now+'] getTerms start');
+        getTerms(term_requireNum);
+    },
+    start:false,
+    timeZone:'Asia/Taipei'
+});
+
+
+
 ReadTWaddress(tw_address_filename,function(){
+    var now = new Date();
+    console.log('['+now+'] getTerms start');
     getTerms(term_requireNum);
 });
 
 
 function getTerms(num)
 {
+    job.stop();
     request({
         url:'http://'+serverip+':'+serverport+'/fbjob/'+termKey+'/'+serverver+'/termbot/getTerms/'+term_lan+'?num='+num,
         timeout:10000
@@ -125,14 +148,15 @@ function getTerms(num)
                 getSeeds(search_term,index);
             }
             else{
-                console.log('terms end');
+                console.log('no any term in termsServer array!');
+                process.exit();
             }
         } 
         else{
             var msg="";
             if(res){
                 if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("retry code:"+res.statusCode);
+                    console.log("[getTerms] retry code:"+res.statusCode);
                     setTimeout(function(){
                         getTerms(num);
                     },again_time*1000);
@@ -179,7 +203,7 @@ function updateTerm(term,stat,fin)
             var msg="";
             if(res){
                 if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("retry code:"+res.statusCode);
+                    console.log("[updateTerm] retry code:"+res.statusCode);
                     setTimeout(function(){
                         updateTerm(term,stat)
                     },5*1000);
@@ -277,7 +301,7 @@ function getSeeds(term,current_index)
             var msg="";
             if(res){
                 if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("retry code:"+res.statusCode);
+                    console.log("[getSeeds] retry code:"+res.statusCode);
                     retryNum++;
                     setTimeout(function(){
                         getSeeds(term,current_index);
@@ -408,7 +432,7 @@ function getSeedID(seeds)
             var msg="";
             if(res){
                 if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("retry code:"+res.statusCode);
+                    console.log("[getSeedID] retry code:"+res.statusCode);
                     retryNum++;   
                     setTimeout(function(){
                         getSeedID(seeds);
@@ -463,7 +487,7 @@ function insertSeed(id,name)
             var msg="";
             if(res){
                 if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("retry code:"+res.statusCode);
+                    console.log("[insertSeed] retry code:"+res.statusCode);
                     retryNum++;   
                     setTimeout(function(){
                         insertSeed(id,name);
@@ -500,7 +524,8 @@ function writeSeed2file(seeds)
 
 function writeLog(dir,msg,action)
 {
-    let log_date = dateFormat(now,"yyyymmdd");
+    var now = new Date();
+    var log_date = dateFormat(now,"yyyymmdd");
     fs.appendFile(dir+'.'+log_date,msg,(err)=>{
         if(err){
             console.log(err);
