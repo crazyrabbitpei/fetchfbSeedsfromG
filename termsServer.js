@@ -778,22 +778,3 @@ app.get('/fbjob/:key/v1.0/termbot/status/:action(update)',function(req,res){
         res.send(result);
     }
 });
-function ReadBotID(){
-    var key="",name="";
-    var i;
-    var type;
-    map_botkey.clear();
-    for(i=0;i<service["data"].length;i++){
-        key = service["data"][i]["key"];
-        name = service["data"][i]["name"];
-        console.log("bot:"+key+" name:"+name);
-        map_botkey.set(key,name);
-    }
-    for(i=0;i<service["grab_type"].length;i++){
-        type = service["grab_type"][i]["type"];
-        console.log("type:"+type);
-        map_grabtype.set(type,1);//ON 1, OFF 0
-    }
-
-
-}

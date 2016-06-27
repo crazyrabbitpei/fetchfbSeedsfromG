@@ -89,6 +89,7 @@ process.on('beforeExit',(code)=>{
             getTerms(term_requireNum);
         }
         else{
+            limit=0;
             key_index=0;
             count_seeds=0;
             old_seeds=0;
