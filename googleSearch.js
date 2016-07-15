@@ -23,6 +23,7 @@ var new_seeds=0;
 var limit=0;
 var retryNum=0;
 var socket_num=0;
+//TODO:要記得將setting資訊存起來，因為只要成功請求到botkey一次，就會永久記錄此key，所以之後就不會再跟bot_manager請求任何資訊，故需要儲存setting
 /*-----------init seed, reading setting--------------*/
 var service1 = JSON.parse(fs.readFileSync('./service/google_client.setting'));
 var main = service1['main'];
@@ -46,6 +47,7 @@ var require_Interval = service1['require_Interval'];
 var serverip = service1['term_serverip'];
 var serverport = service1['term_serverport'];
 var term_server_version = service1['term_server_version'];
+var term_server_name = service1['term_server_name'];
 var term_lan = service1['term_lan'];
 var term_requireNum = service1['term_requireNum'];
 var fetchlimit = service1['fetchlimit'];
@@ -60,6 +62,14 @@ var bot_server_name = service1['bot_server_name'];
 var bot_server_version = service1['bot_server_version'];
 var invitekey = service1['invitekey'];
 var google_botkey = service1['google_botkey'];
+
+var id_serverip = service1['id_serverip'];
+var id_serverport = service1['id_serverport'];
+var id_server_name = service1['id_server_name'];
+var id_server_version = service1['id_server_version'];
+var limit_retry = service1['limit_retry'];
+var timeout_retryTime = service1['timeout_retryTime'];
+
 exports.bot_serverip=bot_serverip;
 exports.bot_serverport=bot_serverport;
 exports.bot_server_name=bot_server_name;
@@ -78,7 +88,7 @@ var key_index=0;
 
 var botkey;
 var setting;
-
+/*
 process.on('beforeExit',(code)=>{
     let date = new Date();
     var stat="";
@@ -111,7 +121,7 @@ process.on('beforeExit',(code)=>{
             new_seeds=0;
             retryNum=0;
             count_index=0;
-            getTerms(term_requireNum);
+            //getTerms(term_requireNum);
         }
         else{
             limit=0;
@@ -127,14 +137,14 @@ process.on('beforeExit',(code)=>{
         }
     });
 });
-
+*/
 var job = new CronJob({
     cronTime:fetchseedsInterval,
     onTick:function(){
         var now = new Date();
         console.log('['+now+'] getTerms start');
         writeLog('['+now+'] getTerms start','process','append');
-        getTerms(term_requireNum);
+        //getTerms(term_requireNum);
     },
     start:false,
     timeZone:'Asia/Taipei'
@@ -180,7 +190,7 @@ if(!module.parent){
                     ReadTWaddress(tw_address_filename,function(){
                         var now = new Date();
                         console.log('['+now+'] getTerms start');
-                        getTerms(term_requireNum);
+                        //getTerms(term_requireNum);
                     });
                 }
             });
@@ -226,6 +236,7 @@ function getkey(fin){
                         console.log('===get a new botkey===\n'+JSON.stringify(content,null,3));        
 
                         //url_manager
+                        
                         exports.id_serverip=setting.id_serverip;
                         exports.id_serverport=setting.id_serverport;
                         exports.id_server_name=setting.id_server_name;
@@ -246,7 +257,7 @@ function getTerms(num)
 {
     job.stop();
     request({
-        url:'http://'+serverip+':'+serverport+'/'+server_name+'/'+termKey+'/'+term_server_version+'/getTerms/'+term_lan+'?num='+num,
+        url:'http://'+serverip+':'+serverport+'/'+term_server_name+'/'+termKey+'/'+term_server_version+'/getTerms/'+term_lan+'?num='+num,
         timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
@@ -301,7 +312,7 @@ function updateTerm(term,stat,fin)
 {
     var query = querystring.stringify({term:term});
     request({
-        url:'http://'+serverip+':'+serverport+'/'+server_name+'/'+termKey+'/'+term_server_version+'/status/update?'+query+'||'+stat,
+        url:'http://'+serverip+':'+serverport+'/'+term_server_name+'/'+termKey+'/'+term_server_version+'/status/update?'+query+'||'+stat,
         timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
@@ -590,7 +601,7 @@ function insertSeed(id,name,fin){
     var temp_ids = querystring.stringify({ids:ids});
     //console.log(temp_ids);
     request({
-        uri:'http://'+setting.id_serverip+':'+setting.id_serverport+'/'+setting.seed_server_name+'/'+botkey+'/'+setting.seed_server_version+'/insertseed/?'+temp_ids,
+        uri:'http://'+id_serverip+':'+id_serverport+'/'+id_server_name+'/'+botkey+'/'+id_server_version+'/insertseed/?'+temp_ids,
         timeout: 60000
     },function(error, response, body){
         var err_msg='',err_flag=0;
@@ -636,10 +647,10 @@ function insertSeed(id,name,fin){
                 console.log("[insertSeed] error:"+error.code);
                 if(error.code.indexOf('TIMEDOUT')!=-1){
                     retryNum++;   
-                    if(retryNum<setting.limit_retry){
+                    if(retryNum<limit_retry){
                         setTimeout(function(){
                             insertSeed(id,name,fin);
-                        },setting.timeout_retryTime*1000);
+                        },timeout_retryTime*1000);
 
                     }
                 }
@@ -652,10 +663,10 @@ function insertSeed(id,name,fin){
                 if(response.statusCode>=500&&response.statusCode<600){
                     console.log('retry [insertSeed]:'+response.statusCode);
                     retryNum++;   
-                    if(retryNum<setting.limit_retry){
+                    if(retryNum<limit_retry){
                         setTimeout(()=>{
                             insertSeed(id,name,fin);
-                        },setting.again_time*1000);
+                        },again_time*1000);
                     }
                 }
                 else{
