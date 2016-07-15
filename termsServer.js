@@ -1,4 +1,5 @@
 'use strict'
+//TODO:可以存取googlebot目前狀況API(今日抓了多少新的seed、詞彙分別為何...目前資料會讓clien端存在loca，未來可能要定期回報)
 var bodyParser = require('body-parser');
 var urlencode = require('urlencode');
 var LineByLineReader = require('line-by-line');

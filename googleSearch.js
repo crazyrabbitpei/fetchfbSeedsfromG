@@ -1,5 +1,5 @@
 'use strict'
-
+//TODO:確認log該記錄的都有記錄
 var CronJob = require('cron').CronJob;
 var request = require('request');
 var http = require('http');
