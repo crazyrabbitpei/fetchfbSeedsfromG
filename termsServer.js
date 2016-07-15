@@ -42,6 +42,7 @@ var service1 = JSON.parse(fs.readFileSync('./service/google_server.setting'));
 
 var apiip = service1['termServerip'];
 var apiport = service1['termServerport'];
+var server_name = service1['termServername'];
 var writeidInterval =  service1['writeidInterval'];
 var detectInterval =  service1['detectInterval'];
 var expire_time =  service1['expire_time'];
@@ -585,7 +586,7 @@ function updateTerm(terms,fin)
  * --key--
  *  specific key
  --------------------------------------*/
-app.get('/fbjob/:key/v1.0/termbot/:action(search|update|insert|delete|show|insertFile)/:lan(en|not_en)?',function(req,res){
+app.get('/'+server_name+'/:key/v1.0/:action(search|update|insert|delete|show|insertFile)/:lan(en|not_en)?',function(req,res){
     var key = req.params.key;
     var action = req.params.action;
     var terms = req.query.terms;//allow mutiple terms=> ter1||ter2||...
@@ -659,7 +660,7 @@ app.get('/fbjob/:key/v1.0/termbot/:action(search|update|insert|delete|show|inser
  *  update processing map: term,"ing"  ,if term's status is not "ing" then can throw it to client bot
  * if there are no terms in the "uncaught" then return "null" to client 
  --------------------------------------*/
-app.get('/fbjob/:key/v1.0/termbot/getTerms/:lan(en|not_en)?',function(req,res){
+app.get('/'+server_name+'/:key/v1.0/getTerms/:lan(en|not_en)?',function(req,res){
     var key = req.params.key;
     var lan = req.params.lan;
     var num = req.query.num;
@@ -730,7 +731,7 @@ app.get('/fbjob/:key/v1.0/termbot/getTerms/:lan(en|not_en)?',function(req,res){
  *      -false:still "uncaught", remove and then insert to "uncaught"
  *      remove term status from  processing map
  --------------------------------------*/
-app.get('/fbjob/:key/v1.0/termbot/status/:action(update)',function(req,res){
+app.get('/'+server_name+'/:key/v1.0/status/:action(update)',function(req,res){
     var key = req.params.key;
     var action = req.params.action;
     var term = req.query.term;

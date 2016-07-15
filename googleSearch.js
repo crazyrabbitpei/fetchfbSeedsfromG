@@ -12,6 +12,7 @@ var querystring = require("querystring");
 var dateFormat = require('dateformat');
 var LineByLineReader = require('line-by-line');
 var HashMap = require('hashmap');
+var server = require('./tool/server.js')
 var map_tw_address  = new HashMap();
 
 var count_index=0;
@@ -31,22 +32,39 @@ var fbkey = service1['fbkey'];
 var cx = service1['cx'];
 var target = service1['site'];
 var index = service1['start'];
-var logDir = service1['log'];
+
+var log = service1['log'];
+var err_filename = service1['err_filename'];
+var process_filename = service1['process_filename'];
+var daily_filename = service1['daily_filename'];
+
 var seedsDir = service1['seedsDir'];
+var seeds_filename = service1['seeds_filename'];
+
+
 var require_Interval = service1['require_Interval'];
-var serverip = service1['termServerip'];
-var serverport = service1['termServerport'];
-var serverver = service1['termServerversion'];
+var serverip = service1['term_serverip'];
+var serverport = service1['term_serverport'];
+var term_server_version = service1['term_server_version'];
 var term_lan = service1['term_lan'];
 var term_requireNum = service1['term_requireNum'];
 var fetchlimit = service1['fetchlimit'];
 var termKey = service1['termKey'];
 var again_time = service1['retryTime'];
 var fetchseedsInterval = service1['fetchseedsInterval'];
-
 var serverKey = service1['serverKey'];
-var urlServerport = service1['urlServerport'];
 
+var bot_serverip = service1['bot_serverip'];
+var bot_serverport = service1['bot_serverport'];
+var bot_server_name = service1['bot_server_name'];
+var bot_server_version = service1['bot_server_version'];
+var invitekey = service1['invitekey'];
+var google_botkey = service1['google_botkey'];
+exports.bot_serverip=bot_serverip;
+exports.bot_serverport=bot_serverport;
+exports.bot_server_name=bot_server_name;
+exports.bot_server_version=bot_server_version;
+exports.invitekey=invitekey;
 
 var tw_address_filename = service1['tw_address'];
 var search_terms_filename = service1['search_terms'];
@@ -56,6 +74,11 @@ var uncaught_terms =  new Array();
 
 var search_term="";
 var key_index=0;
+
+
+var botkey;
+var setting;
+
 process.on('beforeExit',(code)=>{
     let date = new Date();
     var stat="";
@@ -67,9 +90,10 @@ process.on('beforeExit',(code)=>{
     }
     updateTerm(search_term,stat,()=>{
         if(count_seeds!=0&&count_seeds!=old_seeds){
-            writeLog('./seeds/seedLog',"["+date+"] term:"+search_term+" count_seeds:"+count_seeds+" old seeds:"+old_seeds+" new seeds:"+new_seeds+"\n===\n",0);
+            writeLog(search_term+","+count_seeds+","+old_seeds+","+new_seeds,'daily','append');
         }
         console.log('rest term num:'+uncaught_terms.length+' key_index:'+key_index+' googlekey.length:'+googlekey.length)
+        writeLog('rest term num:'+uncaught_terms.length+' key_index:'+key_index+' googlekey.length:'+googlekey.length,'process','append');
         search_term = uncaught_terms.pop();
         if(typeof search_term!=='undefined'&&key_index<googlekey.length){
             count_seeds=0;
@@ -81,6 +105,7 @@ process.on('beforeExit',(code)=>{
         }
         else if(uncaught_terms.length==0&&key_index<googlekey.length&&limit<fetchlimit){
             console.log('[0] limit:'+limit+' fetchlimit:'+fetchlimit);
+            writeLog('[0] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append');
             count_seeds=0;
             old_seeds=0;
             new_seeds=0;
@@ -97,13 +122,10 @@ process.on('beforeExit',(code)=>{
             retryNum=0;
             count_index=0;
             console.log('[1] limit:'+limit+' fetchlimit:'+fetchlimit);
+            writeLog('[1] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append');
             job.start()
-            //process.exit()
         }
     });
-
-
-
 });
 
 var job = new CronJob({
@@ -111,31 +133,126 @@ var job = new CronJob({
     onTick:function(){
         var now = new Date();
         console.log('['+now+'] getTerms start');
+        writeLog('['+now+'] getTerms start','process','append');
         getTerms(term_requireNum);
     },
     start:false,
     timeZone:'Asia/Taipei'
 });
 
+if(!module.parent){
+    fs.readFile(google_botkey,'utf8',(err,data)=>{
+        var err_flag=0;
+        if(err){
+            console.log('read botkey error:'+err);
+            writeLog('read botkey error:'+err,'error','append');
+            err_flag=1;
+        }
+        else{
+            if(data!=''){
+                console.log('==botkey exists==:'+data);
+                botkey=data;
+            }
+            else{
+                err_flag=1;
+            }
+        }
+
+        if(err_flag==1){
+            getkey((stat,err_msg)=>{
+                if(stat=='false'){
+                    console.log('[getkey] err:'+err_msg);
+                    writeLog('[getkey] err:'+err_msg,'error','append');
+                }
+                else if(stat=='ok'){
+                    console.log('==get new botkey==:'+botkey);
+                    fs.writeFile(google_botkey,botkey,(err)=>{
+                        if(err){
+                            console.log('write new key to '+google_botkey+' err:'+err);
+                            writeLog('write new key to '+google_botkey+' err:'+err,'error','append');
+                        }
+                        else{
+                            console.log('Success update botkey to:'+botkey);
+                        }
+
+                    })
+                    writeLog('==get new botkey==:'+botkey,'error','append');
+                    ReadTWaddress(tw_address_filename,function(){
+                        var now = new Date();
+                        console.log('['+now+'] getTerms start');
+                        getTerms(term_requireNum);
+                    });
+                }
+            });
+        }
+        else{
+            ReadTWaddress(tw_address_filename,function(){
+                var now = new Date();
+                console.log('['+now+'] getTerms start');
+                writeLog('['+now+'] getTerms start','process','append');
+                getTerms(term_requireNum);
+            });
+        }
+    });
+}
 
 
-ReadTWaddress(tw_address_filename,function(){
-    var now = new Date();
-    console.log('['+now+'] getTerms start');
-    getTerms(term_requireNum);
-});
+function getkey(fin){
+    //TODO:bot_manager尚未更新有googlebot的版本，goolebotkey為永久不過期，並且不會儲存任何資料在bot_manager，純粹為了拿到能使用url_manager insertseed api的權限，目前因為server都尚未啟動，所以還不能使用
+    server.getBotkey('googlebot',(stat,result,err_msg)=>{
+        if(stat=='ok'){
+            var err_flag=0,err_msg='';
+            try{
+                var content = JSON.parse(result);
+            }
+            catch(e){
+                err_flag=1;
+                err_msg=e;
+            }
+            finally{
+                if(err_flag==1){
+                    fin('false',err_msg);
+                }
+                else if(err_flag==0){
+                    if(content['status']=='false'){
+                        console.log('[getBotkey] '+content['error']);
+                        fin('false',content['error']);
+                    }
+                    else{
+                        botkey = content['data']['bot_manager']['botkey'];
+                        setting = content['data']['bot_manager']['setting'];
+                        exports.botkey=botkey;
+                        exports.setting=setting;
+                        console.log('===get a new botkey===\n'+JSON.stringify(content,null,3));        
 
+                        //url_manager
+                        exports.id_serverip=setting.id_serverip;
+                        exports.id_serverport=setting.id_serverport;
+                        exports.id_server_name=setting.id_server_name;
+                        exports.id_server_version=setting.id_server_version;
+
+                        fin('ok','')
+                    }
+                }
+            }
+        }
+        else{
+            fin('false',err_msg);
+        }
+    });
+}
 
 function getTerms(num)
 {
     job.stop();
     request({
-        url:'http://'+serverip+':'+serverport+'/fbjob/'+termKey+'/'+serverver+'/termbot/getTerms/'+term_lan+'?num='+num,
-        timeout:10000
+        url:'http://'+serverip+':'+serverport+'/'+server_name+'/'+termKey+'/'+term_server_version+'/getTerms/'+term_lan+'?num='+num,
+        timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
             if(body=="illegal request"){
                 console.log("illegal request");
+                writeLog('illegal request','error','append');
                 process.exit(0);
             }
             if(body!=""){
@@ -150,7 +267,8 @@ function getTerms(num)
             }
             else{
                 console.log('no any term in termsServer array!');
-                process.exit();
+                writeLog('no any term in termsServer array!','error','append');
+                process.exit(0);
             }
         } 
         else{
@@ -167,7 +285,7 @@ function getTerms(num)
             }
             else if(err){
                 if(err.code.indexOf('TIMEDOUT')!=-1){
-                    console.log('getTerms:TIMEDOUT');
+                    console.log('getTerms:'+err.code);
                     setTimeout(function(){
                         getTerms(num);
                     },again_time*1000);
@@ -175,8 +293,7 @@ function getTerms(num)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            let date = new Date();
-            writeLog(logDir,"["+date+"]\n"+msg+'\n===\n',0);
+            writeLog(msg,'error','append');
         }
     });
 }
@@ -184,19 +301,22 @@ function updateTerm(term,stat,fin)
 {
     var query = querystring.stringify({term:term});
     request({
-        url:'http://'+serverip+':'+serverport+'/fbjob/'+termKey+'/'+serverver+'/termbot/status/update?'+query+'||'+stat,
-        timeout:10000
+        url:'http://'+serverip+':'+serverport+'/'+server_name+'/'+termKey+'/'+term_server_version+'/status/update?'+query+'||'+stat,
+        timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
             if(body=="illegal request"){
                 console.log("illegal request");
+                writeLog('illegal request','error','append');
                 process.exit(0);
             }
             if(body==""){
                 console.log('updateTerm to ['+stat+'] false:'+term);
+                writeLog('updateTerm to ['+stat+'] false:'+term,'error','append');
             }
             else{
                 console.log('updateTerm to ['+stat+'] success:'+body)
+                writeLog('updateTerm to ['+stat+'] success:'+body,'process','append');
             }
             fin();
         } 
@@ -222,8 +342,7 @@ function updateTerm(term,stat,fin)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            let date = new Date();
-            writeLog(logDir,"["+date+"]\n"+msg+'\n===\n',0);
+            writeLog(msg,'error','append');
         }
     });
 }
@@ -259,7 +378,7 @@ function getSeeds(term,current_index)
                 }
 
                 if(seedname==""||typeof seedname==="undefined"){
-                    writeLog("./logs/watch.err",q_items[i]['link'],0);
+                    writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append');
                 }
                 else{
                     getSeedID(seedname);
@@ -275,7 +394,7 @@ function getSeeds(term,current_index)
             }
             //console.log('next page:'+JSON.stringify(q_nextPage));
             if(typeof q_nextPage==="undefined"&&q_request['count']!=10){
-                //writeLog("./logs/watch.err",JSON.stringify(content,null,2),-1);
+                writeLog('Can\'t get available seedname:'+JSON.stringify(content,null,2),'error','append');
                 count_index=101;
             }
             else if(typeof q_nextPage==="undefined"&&q_request['count']==10){
@@ -311,16 +430,17 @@ function getSeeds(term,current_index)
                 }
                 else if(res['body']){
                     let info = JSON.parse(res['body']);
-                    //console.log(info['error']['message']);
                     if(info['error']['message'].indexOf("Daily Limit Exceeded")!=-1){
+                        writeLog(info['error']['message'],'process','append');
                         key_index++;
                         if(key_index>=googlekey.length){
                             console.log('All keys be used...');
-
+                            writeLog('All keys be used...','process','append');
                         }
                         else{
                             //console.log('googlekey.length:'+googlekey.length);
                             console.log('Use next key...['+key_index+']');
+                            writeLog('Use next key...['+key_index+']','process','append');
                             //setTimeout(function(){
                                 getSeeds(term,current_index);
                             //},5*1000);
@@ -328,13 +448,14 @@ function getSeeds(term,current_index)
                     }
                     else{
                         console.log(info['error']['message']);
+                        writeLog(info['error']['message'],'error','append');
                     }
                 }
                 msg = JSON.stringify(res,null,2);
             }
             else if(err){
                 if(err.code.indexOf('TIMEDOUT')!=-1){
-                    console.log('getSeeds:TIMEDOUT');
+                    console.log('getSeeds:'+err.code);
                     retryNum++;
                     setTimeout(function(){
                         getSeeds(term,current_index);
@@ -343,8 +464,7 @@ function getSeeds(term,current_index)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            let date = new Date();
-            writeLog(logDir,"["+date+"]\n"+msg+'\n===\n',0);
+            writeLog(msg,'error','append');
         }
     });
 }
@@ -402,16 +522,23 @@ function getSeedID(seeds)
                                 },again_time*1000);
                             }
                             else{
-                                let date = new Date()
-                                writeLog(logDir,"["+date+"] "+content['error']['message']+'\n===\n',0);
+                                writeLog(content['error']['message'],'error','append');
                             }
 
                         }
                         else{
                             count_seeds +=1;
                             var result=content['id']+','+content['name'];
-                            insertSeed(content['id'],content['name']);
-
+                            insertSeed(content['id'],content['name'],(stat,err_msg)=>{
+                                if(stat=='error'){
+                                    console.log('[insertSeed] error occur, see '+log);           
+                                    writeLog('[insertSeed] '+stat+':'+err_msg,'error','append');
+                                }
+                                else if(stat=='full'||stat=='stop'){
+                                    console.log('[insertSeed] '+stat+':'+err_msg)
+                                    writeLog('[insertSeed] '+stat+':'+err_msg,'error','append');
+                                }
+                            });
                             /*
                                for(i=0;i<content.length;i++){
                                if(result==""){
@@ -444,7 +571,7 @@ function getSeedID(seeds)
             }
             else if(err){
                 if(err.code.indexOf('TIMEDOUT')!=-1){
-                    console.log('getSeedID:TIMEDOUT');
+                    console.log('getSeedID:'+err.code);
                     retryNum++;   
                     setTimeout(function(){
                         getSeedID(seeds);
@@ -453,76 +580,104 @@ function getSeedID(seeds)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            let date = new Date();
-            writeLog(logDir,"["+date+"]\n"+msg+'\n===\n',0);
+            writeLog(msg,'error','append');
         }
     });
 }
 
-function insertSeed(id,name)
-{
-    var ids = id+":Taiwan";
+function insertSeed(id,name,fin){
+    var ids = id+":Asia";
     var temp_ids = querystring.stringify({ids:ids});
+    //console.log(temp_ids);
     request({
-        url:'http://'+serverip+':'+urlServerport+'/fbjob/'+serverKey+'/v1.0/insertseed/?'+temp_ids,
-        timeout: 10000
-    },(err,res,body)=>{
-        if(!err&&res.statusCode===200){
-            if(body=="illegal request"){
-                console.log("illegal request");
-                process.exit(0);
+        uri:'http://'+setting.id_serverip+':'+setting.id_serverport+'/'+setting.seed_server_name+'/'+botkey+'/'+setting.seed_server_version+'/insertseed/?'+temp_ids,
+        timeout: 60000
+    },function(error, response, body){
+        var err_msg='',err_flag=0;
+        if(!error&&response.statusCode==200){
+            try{
+                var result = JSON.parse(body);
             }
-            else if(body==""){
-                old_seeds++;   
+            catch(e){
+                err_flag=1;
+                err_msg=e;
             }
-            else if(body=="full"){
-                console.log("url map is full=>cronjob stop:"+body);
-                process.exit(0);
+            finally{
+                if(err_flag==1){
+                    fin("error",err_msg);
+                }
+                else{
+                    if(result['status']=='false'){
+                        if(result['error']=='full'){
+                            fin('full','insertSeed:url map is full, can\'t insert any seeds');
+                        }
+                        else{
+                            fin("error",result['error']);
+                        }
+                    }
+                    else{
+                        if(result['data']['url_manager']['Asia']==0&&result['data']['url_manager']['Other']==0){
+                            old_seeds++;   
+                            fin('old','');
+                        }
+                        else{
+                            new_seeds+=result['data']['url_manager']['Asia']+result['data']['url_manager']['Other'];
+                            writeSeed2file(id);
+                            fin('insert','');
+
+                        }
+                    }
+                }
+                console.log('==============now new seeds:'+new_seeds+'===============');
+            }
+        }
+        else{
+            if(error){
+                console.log("[insertSeed] error:"+error.code);
+                if(error.code.indexOf('TIMEDOUT')!=-1){
+                    retryNum++;   
+                    if(retryNum<setting.limit_retry){
+                        setTimeout(function(){
+                            insertSeed(id,name,fin);
+                        },setting.timeout_retryTime*1000);
+
+                    }
+                }
+                else{
+                    err_msg=error;
+                    fin('error',err_msg);
+                }
             }
             else{
-                new_seeds++;
-                writeSeed2file(id);
-            }
-        } 
-        else{
-            var msg="";
-            if(res){
-                if(res.statusCode>=500&&res.statusCode<600){
-                    console.log("[insertSeed] retry code:"+res.statusCode);
+                if(response.statusCode>=500&&response.statusCode<600){
+                    console.log('retry [insertSeed]:'+response.statusCode);
                     retryNum++;   
-                    setTimeout(function(){
-                        insertSeed(id,name);
-                    },again_time*1000);
-                    return;
+                    if(retryNum<setting.limit_retry){
+                        setTimeout(()=>{
+                            insertSeed(id,name,fin);
+                        },setting.again_time*1000);
+                    }
                 }
-                msg = JSON.stringify(res,null,2);
-            }
-            else if(err){
-                if(err.code.indexOf('TIMEDOUT')!=-1){
-                    console.log('insertSeed:TIMEDOUT');
-                    retryNum++;   
-                    setTimeout(function(){
-                        insertSeed(id,name);
-                    },again_time*1000);
-                    return;
+                else{
+                    var err_msg=JSON.parse(response.body)['error'];
+                    console.log('[insertSeed]:'+err_msg);
+                    fin('error',err_msg);
                 }
-                msg = JSON.stringify(err,null,2);
             }
-            let date = new Date();
-            writeLog(logDir,"["+date+"]\n"+msg+'\n===\n',0);
         }
+
+
     });
 }
-
 function writeSeed2file(seeds)
 {
-    fs.appendFile(seedsDir,seeds+'\n',(err)=>{
+    fs.appendFile(seedsDir+'/'+seeds_filename,seeds+'\n',(err)=>{
         if(err){
             console.log(err);
         }
     });
 }
-
+/*
 function writeLog(dir,msg,action)
 {
     var now = new Date();
@@ -536,6 +691,7 @@ function writeLog(dir,msg,action)
         }
     });
 }
+*/
 function ReadTWaddress(tw_address_filename,fin){
     var options = {
         //encoding: 'utf8',
@@ -604,8 +760,62 @@ function ReadTWaddress(tw_address_filename,fin){
         map_tw_address.set("台灣","Taiwan");
         map_tw_address.set("臺灣","Taiwan");
         map_tw_address.set("Taiwan","臺灣");
+        map_tw_address.set("Asia","亞洲");
+        map_tw_address.set("亞洲","Asia");
         console.log("read map_tw_address done");
         fin();
     });
 
+}
+function writeLog(msg,type,opt)
+{
+    var now = dateFormat(new Date(),'yyyymmdd');
+    var logdate = new Date();
+    if(opt=='append'){
+        if(type=='error'){
+            fs.appendFile(log+'/'+now+err_filename,'['+logdate+'] '+msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+        else if(type=='process'){
+            fs.appendFile(log+'/'+now+process_filename,'['+logdate+'] '+msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+        else if(type=='daily'){
+            fs.appendFile(log+'/'+now+daily_filename,msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+
+    }
+    else if(opt=='write'){
+        if(type=='error'){
+            fs.writeFile(log+'/'+now+err_filename,'['+logdate+'] '+msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+        else if(type=='process'){
+            fs.writeFile(log+'/'+now+process_filename,'['+logdate+'] '+msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+        else if(type=='daily'){
+            fs.writeFile(log+'/'+now+daily_filename,msg+'\n',function(err){
+                if(err){
+                    console.log(err);
+                }
+            });
+        }
+    }
 }
