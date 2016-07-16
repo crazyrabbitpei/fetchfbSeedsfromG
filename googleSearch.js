@@ -25,7 +25,7 @@ var retryNum=0;
 var socket_num=0;
 //TODO:要記得將setting資訊存起來，因為只要成功請求到botkey一次，就會永久記錄此key，所以之後就不會再跟bot_manager請求任何資訊，故需要儲存setting
 /*-----------init seed, reading setting--------------*/
-var service1 = JSON.parse(fs.readFileSync('./service/google_client.setting'));
+var service1 = JSON.parse(fs.readFileSync('./service/google_client.setting','utf8'));
 var main = service1['main'];
 var fbmain = service1['fbmain'];
 var googlekey = service1['googlekey'];
@@ -33,6 +33,8 @@ var fbkey = service1['fbkey'];
 var cx = service1['cx'];
 var target = service1['site'];
 var index = service1['start'];
+var excludesite = service1['excludesite'];
+var excludeterm = service1['excludeterm'];
 
 var log = service1['log'];
 var err_filename = service1['err_filename'];
@@ -63,12 +65,12 @@ var bot_server_version = service1['bot_server_version'];
 var invitekey = service1['invitekey'];
 var google_botkey = service1['google_botkey'];
 
-var id_serverip = service1['id_serverip'];
-var id_serverport = service1['id_serverport'];
-var id_server_name = service1['id_server_name'];
-var id_server_version = service1['id_server_version'];
-var limit_retry = service1['limit_retry'];
-var timeout_retryTime = service1['timeout_retryTime'];
+var id_serverip;
+var id_serverport;
+var id_server_name;
+var id_server_version;
+var limit_retry;
+var timeout_retryTime;
 
 exports.bot_serverip=bot_serverip;
 exports.bot_serverport=bot_serverport;
@@ -83,13 +85,15 @@ var caught_terms =  new Array();
 var uncaught_terms =  new Array();
 
 var search_term="";
+
 var key_index=0;
 
 
 var botkey;
 var setting;
-/*
+
 process.on('beforeExit',(code)=>{
+    console.log('==============now new seeds:'+new_seeds+'===============');
     let date = new Date();
     var stat="";
     if(count_index<101){
@@ -100,10 +104,10 @@ process.on('beforeExit',(code)=>{
     }
     updateTerm(search_term,stat,()=>{
         if(count_seeds!=0&&count_seeds!=old_seeds){
-            writeLog(search_term+","+count_seeds+","+old_seeds+","+new_seeds,'daily','append');
+            writeLog(search_term+","+count_seeds+","+old_seeds+","+new_seeds,'daily','append',0);
         }
         console.log('rest term num:'+uncaught_terms.length+' key_index:'+key_index+' googlekey.length:'+googlekey.length)
-        writeLog('rest term num:'+uncaught_terms.length+' key_index:'+key_index+' googlekey.length:'+googlekey.length,'process','append');
+        writeLog('rest term num:'+uncaught_terms.length+' key_index:'+key_index+' googlekey.length:'+googlekey.length,'process','append',0);
         search_term = uncaught_terms.pop();
         if(typeof search_term!=='undefined'&&key_index<googlekey.length){
             count_seeds=0;
@@ -115,13 +119,13 @@ process.on('beforeExit',(code)=>{
         }
         else if(uncaught_terms.length==0&&key_index<googlekey.length&&limit<fetchlimit){
             console.log('[0] limit:'+limit+' fetchlimit:'+fetchlimit);
-            writeLog('[0] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append');
+            writeLog('[0] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append',0);
             count_seeds=0;
             old_seeds=0;
             new_seeds=0;
             retryNum=0;
             count_index=0;
-            //getTerms(term_requireNum);
+            getTerms(term_requireNum);
         }
         else{
             limit=0;
@@ -132,65 +136,103 @@ process.on('beforeExit',(code)=>{
             retryNum=0;
             count_index=0;
             console.log('[1] limit:'+limit+' fetchlimit:'+fetchlimit);
-            writeLog('[1] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append');
+            writeLog('[1] limit:'+limit+' fetchlimit:'+fetchlimit,'process','append',0);
             job.start()
         }
     });
 });
-*/
 var job = new CronJob({
     cronTime:fetchseedsInterval,
     onTick:function(){
         var now = new Date();
         console.log('['+now+'] getTerms start');
-        writeLog('['+now+'] getTerms start','process','append');
-        //getTerms(term_requireNum);
+        writeLog('['+now+'] getTerms start','process','append',0);
+        getTerms(term_requireNum);
     },
     start:false,
     timeZone:'Asia/Taipei'
 });
 
+var excludesite_term='';
+var excludeterm_term='';
 if(!module.parent){
+    var i;
+    var len=excludesite.length;
+    console.log(excludesite.length);
+    for(i=0;i<len;i++){
+        excludesite_term+=' -site:'+excludesite[i]['site'];
+        //excludesite_term+='+%2Dsite%3A'+excludesite[i]['site'];
+    }
+    len=excludeterm.length;
+    for(i=0;i<len;i++){
+        excludeterm_term+=' -'+excludeterm[i]['term'];
+        //excludeterm_term+='+%2D'+excludeterm[i]['term'];
+    }
+    
+    //console.log('excludesite_term:'+excludesite_term);
+    //console.log('excludeterm_term:'+excludeterm_term);
+
+    console.log('Start reading '+google_botkey+' ...');
     fs.readFile(google_botkey,'utf8',(err,data)=>{
         var err_flag=0;
         if(err){
             console.log('read botkey error:'+err);
-            writeLog('read botkey error:'+err,'error','append');
+            writeLog('read botkey error:'+err,'error','append',0);
             err_flag=1;
         }
         else{
             if(data!=''){
-                console.log('==botkey exists==:'+data);
-                botkey=data;
+                console.log('Has ori setting!');
+                var read_err_flag=0,err_msg='';
+                try{
+                    var ori_setting = JSON.parse(data);
+                }
+                catch(e){
+                    err_msg=e;
+                    read_err_flag=1;
+
+                }
+                finally{
+                    if(read_err_flag==1){
+                        writeLog('[getkey-get ori setting] error:'+e,'error','append',1);
+                    }
+                    else{
+                        botkey=ori_setting['data']['bot_manager']['botkey'];
+                        id_serverip=ori_setting['data']['bot_manager']['setting']['id_serverip'];
+                        id_serverport=ori_setting['data']['bot_manager']['setting']['id_serverport'];
+                        id_server_name=ori_setting['data']['bot_manager']['setting']['seed_server_name'];
+                        id_server_version=ori_setting['data']['bot_manager']['setting']['seed_server_version'];
+                        limit_retry=ori_setting['data']['bot_manager']['setting']['limit_retry'];
+                        timeout_retryTime=ori_setting['data']['bot_manager']['setting']['timeout_retryTime'];
+                        if(typeof id_serverip==='undefined'){
+                            console.log(google_botkey+' formal error!!!');
+                            process.exit(0);   
+                        }
+                        else{
+                            console.log('==botkey exists==:'+botkey);
+                        }
+
+                    }
+                }
             }
             else{
+                console.log('Need to require a new setting from bot_manager!');
                 err_flag=1;
             }
         }
-
+        //要請求新的botkey，因為目前loca沒有記錄任何可用的botkey
         if(err_flag==1){
             getkey((stat,err_msg)=>{
                 if(stat=='false'){
                     console.log('[getkey] err:'+err_msg);
-                    writeLog('[getkey] err:'+err_msg,'error','append');
+                    writeLog('[getkey] err:'+err_msg,'error','append',1);
                 }
                 else if(stat=='ok'){
                     console.log('==get new botkey==:'+botkey);
-                    fs.writeFile(google_botkey,botkey,(err)=>{
-                        if(err){
-                            console.log('write new key to '+google_botkey+' err:'+err);
-                            writeLog('write new key to '+google_botkey+' err:'+err,'error','append');
-                        }
-                        else{
-                            console.log('Success update botkey to:'+botkey);
-                        }
-
-                    })
-                    writeLog('==get new botkey==:'+botkey,'error','append');
                     ReadTWaddress(tw_address_filename,function(){
                         var now = new Date();
                         console.log('['+now+'] getTerms start');
-                        //getTerms(term_requireNum);
+                        getTerms(term_requireNum);
                     });
                 }
             });
@@ -199,7 +241,7 @@ if(!module.parent){
             ReadTWaddress(tw_address_filename,function(){
                 var now = new Date();
                 console.log('['+now+'] getTerms start');
-                writeLog('['+now+'] getTerms start','process','append');
+                writeLog('['+now+'] getTerms start','process','append',0);
                 getTerms(term_requireNum);
             });
         }
@@ -208,7 +250,6 @@ if(!module.parent){
 
 
 function getkey(fin){
-    //TODO:bot_manager尚未更新有googlebot的版本，goolebotkey為永久不過期，並且不會儲存任何資料在bot_manager，純粹為了拿到能使用url_manager insertseed api的權限，目前因為server都尚未啟動，所以還不能使用
     server.getBotkey('googlebot',(stat,result,err_msg)=>{
         if(stat=='ok'){
             var err_flag=0,err_msg='';
@@ -233,16 +274,29 @@ function getkey(fin){
                         setting = content['data']['bot_manager']['setting'];
                         exports.botkey=botkey;
                         exports.setting=setting;
-                        console.log('===get a new botkey===\n'+JSON.stringify(content,null,3));        
-
                         //url_manager
-                        
                         exports.id_serverip=setting.id_serverip;
                         exports.id_serverport=setting.id_serverport;
                         exports.id_server_name=setting.id_server_name;
                         exports.id_server_version=setting.id_server_version;
 
-                        fin('ok','')
+                        fs.writeFile(google_botkey,JSON.stringify(content,null,3),(err)=>{
+                            if(err){
+                                console.log('write new key to '+google_botkey+' err:'+err);
+                                writeLog('write new key to '+google_botkey+' err:'+err,'error','append',1);
+                            }
+                            else{
+                                console.log('Success update setting:\n'+JSON.stringify(content,null,3));
+                                id_serverip=setting['id_serverip'];
+                                id_serverport=setting['id_serverport'];
+                                id_server_name=setting['seed_server_name'];
+                                id_server_version=setting['seed_server_version'];
+                                limit_retry=setting['limit_retry'];
+                                timeout_retryTime=setting['timeout_retryTime'];
+
+                                fin('ok','')
+                            }
+                        });
                     }
                 }
             }
@@ -263,8 +317,7 @@ function getTerms(num)
         if(!err&&res.statusCode===200){
             if(body=="illegal request"){
                 console.log("illegal request");
-                writeLog('illegal request','error','append');
-                process.exit(0);
+                writeLog('illegal request','error','append',1);
             }
             if(body!=""){
                 var parts = body.split('||');
@@ -278,8 +331,7 @@ function getTerms(num)
             }
             else{
                 console.log('no any term in termsServer array!');
-                writeLog('no any term in termsServer array!','error','append');
-                process.exit(0);
+                writeLog('no any term in termsServer array!','error','append',1);
             }
         } 
         else{
@@ -304,7 +356,7 @@ function getTerms(num)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            writeLog(msg,'error','append');
+            writeLog(msg,'error','append',0);
         }
     });
 }
@@ -318,16 +370,15 @@ function updateTerm(term,stat,fin)
         if(!err&&res.statusCode===200){
             if(body=="illegal request"){
                 console.log("illegal request");
-                writeLog('illegal request','error','append');
-                process.exit(0);
+                writeLog('illegal request','error','append',1);
             }
             if(body==""){
-                console.log('updateTerm to ['+stat+'] false:'+term);
-                writeLog('updateTerm to ['+stat+'] false:'+term,'error','append');
+                console.log('updateTerm '+stat+' false:'+term);
+                writeLog('updateTerm '+stat+' false:'+term,'process','append',0);
             }
             else{
-                console.log('updateTerm to ['+stat+'] success:'+body)
-                writeLog('updateTerm to ['+stat+'] success:'+body,'process','append');
+                console.log('updateTerm '+stat+' success:'+body)
+                writeLog('updateTerm '+stat+' success:'+body,'process','append',0);
             }
             fin();
         } 
@@ -353,15 +404,15 @@ function updateTerm(term,stat,fin)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            writeLog(msg,'error','append');
+            writeLog(msg,'error','append',0);
         }
     });
 }
 function getSeeds(term,current_index)
 {
-    console.log('Seed term:'+term)
+    console.log('Seed term:'+term+excludesite_term+excludeterm_term)
     socket_num++;
-    var query = querystring.stringify({q:term});
+    var query = querystring.stringify({q:term+excludesite_term+excludeterm_term});
     request({
         url:main+'?siteSearch='+target+'&key='+googlekey[key_index]['gkey']+'&cx='+cx+'&start='+current_index+'&'+query,
         timeout:10000
@@ -386,13 +437,15 @@ function getSeeds(term,current_index)
                 var seedname = S(q_items[i]['link']).between('facebook.com/','/').s;
                 if(seedname==""||typeof seedname==="undefined"){
                     seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
+                    seedname = S(seedname).strip('https://zh-tw.facebook.com/').s;
                 }
 
                 if(seedname==""||typeof seedname==="undefined"){
-                    writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append');
+                    writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append',0);
                 }
                 else{
                     getSeedID(seedname);
+
                 }
                 /*
                 if(seeds==""){
@@ -405,7 +458,7 @@ function getSeeds(term,current_index)
             }
             //console.log('next page:'+JSON.stringify(q_nextPage));
             if(typeof q_nextPage==="undefined"&&q_request['count']!=10){
-                writeLog('Can\'t get available seedname:'+JSON.stringify(content,null,2),'error','append');
+                writeLog('Can\'t get available seedname:'+JSON.stringify(content,null,2),'error','append',0);
                 count_index=101;
             }
             else if(typeof q_nextPage==="undefined"&&q_request['count']==10){
@@ -442,16 +495,16 @@ function getSeeds(term,current_index)
                 else if(res['body']){
                     let info = JSON.parse(res['body']);
                     if(info['error']['message'].indexOf("Daily Limit Exceeded")!=-1){
-                        writeLog(info['error']['message'],'process','append');
+                        writeLog(info['error']['message'],'process','append',0);
                         key_index++;
                         if(key_index>=googlekey.length){
                             console.log('All keys be used...');
-                            writeLog('All keys be used...','process','append');
+                            writeLog('All keys be used...','process','append',0);
                         }
                         else{
                             //console.log('googlekey.length:'+googlekey.length);
                             console.log('Use next key...['+key_index+']');
-                            writeLog('Use next key...['+key_index+']','process','append');
+                            writeLog('Use next key...['+key_index+']','process','append',0);
                             //setTimeout(function(){
                                 getSeeds(term,current_index);
                             //},5*1000);
@@ -459,7 +512,7 @@ function getSeeds(term,current_index)
                     }
                     else{
                         console.log(info['error']['message']);
-                        writeLog(info['error']['message'],'error','append');
+                        writeLog(info['error']['message'],'error','append',1);
                     }
                 }
                 msg = JSON.stringify(res,null,2);
@@ -475,20 +528,19 @@ function getSeeds(term,current_index)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            writeLog(msg,'error','append');
+            writeLog(msg,'error','append',0);
         }
     });
 }
 
 function getSeedID(seeds)
 {
-
     if(seeds.indexOf("-")!=-1){
         var id = seeds.split("-");
         seeds = id[id.length-1];
     }
     console.log("seeds:"+seeds);
-
+    fs.appendFile('./seed.list',seeds+'\n',()=>{});
     request({
         url:fbmain+seeds+'?fields=id,name&access_token='+fbkey,
         //url:fbmain+'?ids='+seeds+'&fields=id,name&access_token='+fbkey,
@@ -533,7 +585,7 @@ function getSeedID(seeds)
                                 },again_time*1000);
                             }
                             else{
-                                writeLog(content['error']['message'],'error','append');
+                                writeLog(content['error']['message'],'error','append',0);
                             }
 
                         }
@@ -542,25 +594,37 @@ function getSeedID(seeds)
                             var result=content['id']+','+content['name'];
                             insertSeed(content['id'],content['name'],(stat,err_msg)=>{
                                 if(stat=='error'){
-                                    console.log('[insertSeed] error occur, see '+log);           
-                                    writeLog('[insertSeed] '+stat+':'+err_msg,'error','append');
+                                    console.log('[insertSeed] '+stat+':'+err_msg)
+                                    if(err_msg.indexOf('illegal api-key')!=-1){//因為gogolebotkey只存留在bot_manager的memory，所以可能因為server重啟，所以key被刷掉，需要重新申請新的設定檔
+                                        writeLog('[insertSeed] '+stat+':'+err_msg,'error','append',0);
+                                        getkey((stat,err_msg)=>{
+                                            if(stat=='false'){
+                                                console.log('[getkey-re] err:'+err_msg);
+                                                writeLog('[getkey-re] err:'+err_msg,'error','append',1);
+                                            }
+                                            else if(stat=='ok'){
+                                                console.log('==get new botkey==:'+botkey);
+                                                insertSeed(content['id'],content['name'],(stat,err_msg)=>{
+                                                    if(stat=='error'){
+                                                        writeLog('[insertSeed-re] '+stat+':'+err_msg,'error','append',1);
+                                                    }
+                                                    else if(stat=='full'||stat=='stop'){
+                                                        console.log('[insertSeed-re] '+stat+':'+err_msg)
+                                                        writeLog('[insertSeed-re] '+stat+':'+err_msg,'error','append',1);
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+                                    else{
+                                        writeLog('[insertSeed] '+stat+':'+err_msg,'error','append',1);
+                                    }
                                 }
                                 else if(stat=='full'||stat=='stop'){
                                     console.log('[insertSeed] '+stat+':'+err_msg)
-                                    writeLog('[insertSeed] '+stat+':'+err_msg,'error','append');
+                                    writeLog('[insertSeed] '+stat+':'+err_msg,'error','append',1);
                                 }
                             });
-                            /*
-                               for(i=0;i<content.length;i++){
-                               if(result==""){
-                               result = content[i]['id']+','+content[i]['name'];
-                               }
-                               else{
-                               result += '\n'+content[i]['id']+','+content[i]['name'];
-                               }
-
-                               }
-                               */
                         }
                     }
                 }
@@ -591,11 +655,11 @@ function getSeedID(seeds)
                 }
                 msg = JSON.stringify(err,null,2);
             }
-            writeLog(msg,'error','append');
+            writeLog(msg,'error','append',0);
         }
     });
 }
-
+//TODO:可一次新增多個
 function insertSeed(id,name,fin){
     var ids = id+":Asia";
     var temp_ids = querystring.stringify({ids:ids});
@@ -639,7 +703,7 @@ function insertSeed(id,name,fin){
                         }
                     }
                 }
-                console.log('==============now new seeds:'+new_seeds+'===============');
+
             }
         }
         else{
@@ -655,8 +719,7 @@ function insertSeed(id,name,fin){
                     }
                 }
                 else{
-                    err_msg=error;
-                    fin('error',err_msg);
+                    fin('error',err.code);
                 }
             }
             else{
@@ -778,7 +841,7 @@ function ReadTWaddress(tw_address_filename,fin){
     });
 
 }
-function writeLog(msg,type,opt)
+function writeLog(msg,type,opt,end)
 {
     var now = dateFormat(new Date(),'yyyymmdd');
     var logdate = new Date();
@@ -788,6 +851,9 @@ function writeLog(msg,type,opt)
                 if(err){
                     console.log(err);
                 }
+                if(end==1){
+                    process.exit(0);
+                }
             });
         }
         else if(type=='process'){
@@ -795,12 +861,18 @@ function writeLog(msg,type,opt)
                 if(err){
                     console.log(err);
                 }
+                if(end==1){
+                    process.exit(0);
+                }
             });
         }
         else if(type=='daily'){
-            fs.appendFile(log+'/'+now+daily_filename,msg+'\n',function(err){
+            fs.appendFile(seedsDir+'/'+now+daily_filename,msg+'\n',function(err){
                 if(err){
                     console.log(err);
+                }
+                if(end==1){
+                    process.exit(0);
                 }
             });
         }
@@ -812,6 +884,9 @@ function writeLog(msg,type,opt)
                 if(err){
                     console.log(err);
                 }
+                if(end==1){
+                    process.exit(0);
+                }
             });
         }
         else if(type=='process'){
@@ -819,12 +894,18 @@ function writeLog(msg,type,opt)
                 if(err){
                     console.log(err);
                 }
+                if(end==1){
+                    process.exit(0);
+                }
             });
         }
         else if(type=='daily'){
             fs.writeFile(log+'/'+now+daily_filename,msg+'\n',function(err){
                 if(err){
                     console.log(err);
+                }
+                if(end==1){
+                    process.exit(0);
                 }
             });
         }
