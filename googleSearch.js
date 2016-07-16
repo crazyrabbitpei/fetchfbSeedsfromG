@@ -438,6 +438,7 @@ function getSeeds(term,current_index)
                 if(seedname==""||typeof seedname==="undefined"){
                     seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
                     seedname = S(seedname).strip('https://zh-tw.facebook.com/').s;
+                    seedname = S(seedname).strip('https://tw.facebook.com/').s;
                 }
 
                 if(seedname==""||typeof seedname==="undefined"){
