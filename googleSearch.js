@@ -39,11 +39,11 @@ var excludeterm = service1['excludeterm'];
 var log = service1['log'];
 var err_filename = service1['err_filename'];
 var process_filename = service1['process_filename'];
-var daily_filename = service1['daily_filename'];
+
 
 var seedsDir = service1['seedsDir'];
 var seeds_filename = service1['seeds_filename'];
-
+var daily_filename = service1['daily_filename'];
 
 var require_Interval = service1['require_Interval'];
 var serverip = service1['term_serverip'];
@@ -428,55 +428,57 @@ function getSeeds(term,current_index)
             }
             var content = JSON.parse(body);
             var q_request = content['queries']['request'];
+            var q_num = content['queries']['totalResults'];
             var q_nextPage = content['queries']['nextPage'];
             var q_items = content['items'];
-            var seeds="";
-
-            var i;
-            for(i=0;i<q_items.length;i++){
-                var seedname = S(q_items[i]['link']).between('facebook.com/','/').s;
-                if(seedname==""||typeof seedname==="undefined"){
-                    seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
-                    seedname = S(seedname).strip('https://zh-tw.facebook.com/').s;
-                    seedname = S(seedname).strip('https://tw.facebook.com/').s;
-                }
-
-                if(seedname==""||typeof seedname==="undefined"){
-                    writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append',0);
-                }
-                else{
-                    getSeedID(seedname);
-
-                }
-                /*
-                if(seeds==""){
-                    seeds=seedname;
-                }
-                else{
-                    seeds+=','+seedname;
-                }
-                */
+            /*
+            if(typeof q_items==='undefined'){
+                writeLog('Can\'t get available seedname:\n'+body,'error','append',1);
             }
-            //console.log('next page:'+JSON.stringify(q_nextPage));
-            if(typeof q_nextPage==="undefined"&&q_request['count']!=10){
-                writeLog('Can\'t get available seedname:'+JSON.stringify(content,null,2),'error','append',0);
+            */
+           //TODO:testing
+            if(q_num=="0"||q_num==0){
                 count_index=101;
             }
-            else if(typeof q_nextPage==="undefined"&&q_request['count']==10){
-                console.log("q_nextPage retry");
-                retryNum++;
-                setTimeout(function(){
-                    getSeeds(term,current_index);
-                },again_time*1000);
-                return;
-            }
             else{
-                console.log(q_nextPage[0]['startIndex']);
-                count_index = q_nextPage[0]['startIndex'];
-                if(q_nextPage[0]['startIndex']<101){
-                    setTimeout(()=>{
-                        getSeeds(term,q_nextPage[0]['startIndex']);
-                    },require_Interval*1000);
+                var seeds="";
+                var i;
+                for(i=0;i<q_items.length;i++){
+                    var seedname = S(q_items[i]['link']).between('facebook.com/','/').s;
+                    if(seedname==""||typeof seedname==="undefined"){
+                        seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
+                        seedname = S(seedname).strip('https://zh-tw.facebook.com/').s;
+                        seedname = S(seedname).strip('https://tw.facebook.com/').s;
+                    }
+
+                    if(seedname==""||typeof seedname==="undefined"){
+                        writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append',0);
+                    }
+                    else{
+                        getSeedID(seedname);
+                    }
+                }
+                //console.log('next page:'+JSON.stringify(q_nextPage));
+                if(typeof q_nextPage==="undefined"&&q_request['count']!=10){
+                    writeLog('Can\'t get available seedname:'+JSON.stringify(content,null,2),'error','append',0);
+                    count_index=101;
+                }
+                else if(typeof q_nextPage==="undefined"&&q_request['count']==10){
+                    console.log("q_nextPage retry");
+                    retryNum++;
+                    setTimeout(function(){
+                        getSeeds(term,current_index);
+                    },again_time*1000);
+                    return;
+                }
+                else{
+                    console.log(q_nextPage[0]['startIndex']);
+                    count_index = q_nextPage[0]['startIndex'];
+                    if(q_nextPage[0]['startIndex']<101){
+                        setTimeout(()=>{
+                            getSeeds(term,q_nextPage[0]['startIndex']);
+                        },require_Interval*1000);
+                    }
                 }
             }
 
@@ -506,9 +508,7 @@ function getSeeds(term,current_index)
                             //console.log('googlekey.length:'+googlekey.length);
                             console.log('Use next key...['+key_index+']');
                             writeLog('Use next key...['+key_index+']','process','append',0);
-                            //setTimeout(function(){
-                                getSeeds(term,current_index);
-                            //},5*1000);
+                            getSeeds(term,current_index);
                         }
                     }
                     else{
@@ -901,7 +901,7 @@ function writeLog(msg,type,opt,end)
             });
         }
         else if(type=='daily'){
-            fs.writeFile(log+'/'+now+daily_filename,msg+'\n',function(err){
+            fs.writeFile(seedsDir+'/'+now+daily_filename,msg+'\n',function(err){
                 if(err){
                     console.log(err);
                 }
