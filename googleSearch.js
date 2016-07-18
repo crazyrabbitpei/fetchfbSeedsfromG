@@ -91,7 +91,6 @@ var key_index=0;
 
 var botkey;
 var setting;
-
 process.on('beforeExit',(code)=>{
     console.log('==============now new seeds:'+new_seeds+'===============');
     let date = new Date();
@@ -449,6 +448,8 @@ function getSeeds(term,current_index)
                         seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
                         seedname = S(seedname).strip('https://zh-tw.facebook.com/').s;
                         seedname = S(seedname).strip('https://tw.facebook.com/').s;
+                        seedname = S(seedname).strip('https://tw.facebook.com/').s;
+                        seedname = S(seedname).strip('http://zh-tw.facebook.com/').s;
                     }
 
                     if(seedname==""||typeof seedname==="undefined"){

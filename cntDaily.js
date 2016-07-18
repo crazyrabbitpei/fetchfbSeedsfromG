@@ -21,6 +21,8 @@ Read_total('2016'+date+daily_filename);
 
 function Read_total(filename){
     var term='',term_cnt,total_seed,old_seed,new_seed;
+    var list=[];
+    var set=new Object();
     term_cnt=total_seed=old_seed=new_seed=0;
     console.log('===粉專擴展狀況===')
     var options = {
@@ -35,13 +37,8 @@ function Read_total(filename){
     });
     lr.on('line', function (line) {
         var part = line.split(',');
-        if(term==''){
-            term = part[0];
-        }
-        else{
-            term +=','+part[0];
-        }
-
+        set={term:part[0],cnt:part[3]/part[1]};
+        list.push(set);
         term_cnt++;
         total_seed+=parseInt(part[1]);
         old_seed+=parseInt(part[2]);
@@ -49,6 +46,18 @@ function Read_total(filename){
     });
     lr.on('end', function () {
         var percent = new_seed/total_seed;
-        console.log('用google搜到的粉專:'+total_seed+'\n新的:'+new_seed+'\n使用了幾個詞彙:'+term_cnt+'\n新的比例:'+percent);
+        var i;
+        list.sort(function(a,b){
+            return a['cnt']>b['cnt']? -1 : a['cnt']<b['cnt']? 1:0
+        });
+        for(i=0;i<list.length;i++){
+            if(term==''){
+                term = list[i]['term']+'('+list[i]['cnt']+')';
+            }
+            else{
+                term +='\n'+list[i]['term']+'('+list[i]['cnt']+')';
+            }
+        }
+        console.log('日期:'+date+'\n用google搜到的粉專:'+total_seed+'\n新的:'+new_seed+'\n使用了幾個詞彙:'+term_cnt+'\n新的比例:'+percent+'\n詞彙:\n'+term+'\n');
     });
 }
