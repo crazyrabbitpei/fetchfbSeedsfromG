@@ -450,6 +450,12 @@ function getSeeds(term,current_index)
                         seedname = S(seedname).strip('https://tw.facebook.com/').s;
                         seedname = S(seedname).strip('https://tw.facebook.com/').s;
                         seedname = S(seedname).strip('http://zh-tw.facebook.com/').s;
+                        seedname = S(seedname).strip('jp.facebook.com/').s;
+
+                        var another = seedname.split('?');
+                        if(another.length>=2){
+                            seedname=another[0];
+                        }
                     }
 
                     if(seedname==""||typeof seedname==="undefined"){
@@ -721,7 +727,7 @@ function insertSeed(id,name,fin){
                     }
                 }
                 else{
-                    fin('error',err.code);
+                    fin('error',error.code);
                 }
             }
             else{
