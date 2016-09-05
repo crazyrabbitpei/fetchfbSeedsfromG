@@ -33,6 +33,7 @@ var fbkey = service1['fbkey'];
 var cx = service1['cx'];
 var target = service1['site'];
 var index = service1['start'];
+var max_num = service1['num'];
 var excludesite = service1['excludesite'];
 var excludeterm = service1['excludeterm'];
 
@@ -413,8 +414,8 @@ function getSeeds(term,current_index)
     socket_num++;
     var query = querystring.stringify({q:term+excludesite_term+excludeterm_term});
     request({
-        url:main+'?siteSearch='+target+'&key='+googlekey[key_index]['gkey']+'&cx='+cx+'&start='+current_index+'&'+query,
-        timeout:10000
+        url:main+'?siteSearch='+target+'&key='+googlekey[key_index]['gkey']+'&cx='+cx+'&start='+current_index+'&'+query+'&num='+max_num,
+        timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
             if(typeof body==="undefined"||body==""){
@@ -430,11 +431,17 @@ function getSeeds(term,current_index)
             var q_num = content['queries']['totalResults'];
             var q_nextPage = content['queries']['nextPage'];
             var q_items = content['items'];
-            /*
+            fs.appendFile('./demo1.list',JSON.stringify(body,null,2)+'\n\n',()=>{
+
+            });
+            fs.appendFile('./demo2.list',JSON.stringify(content,null,2)+'\n\n',()=>{
+
+            });
             if(typeof q_items==='undefined'){
-                writeLog('Can\'t get available seedname:\n'+body,'error','append',1);
+                writeLog('Can\'t get available seedname:\n'+body,'error','append',0);
+                return;
             }
-            */
+
            //TODO:testing
             if(q_num=="0"||q_num==0){
                 count_index=101;
@@ -443,6 +450,10 @@ function getSeeds(term,current_index)
                 var seeds="";
                 var i;
                 for(i=0;i<q_items.length;i++){
+                    if(q_items[i]['link'].indexOf('profile')!=-1){
+                        continue;
+                    }
+
                     var seedname = S(q_items[i]['link']).between('facebook.com/','/').s;
                     if(seedname==""||typeof seedname==="undefined"){
                         seedname = S(q_items[i]['link']).strip('https://www.facebook.com/').s;
@@ -458,6 +469,9 @@ function getSeeds(term,current_index)
                         }
                     }
 
+                    if(seedname=='business'||seedname=='commerce'){
+                        continue;
+                    }
                     if(seedname==""||typeof seedname==="undefined"){
                         writeLog('Can\'t get available seedname:'+q_items[i]['link'],'error','append',0);
                     }
@@ -504,7 +518,7 @@ function getSeeds(term,current_index)
                 }
                 else if(res['body']){
                     let info = JSON.parse(res['body']);
-                    if(info['error']['message'].indexOf("Daily Limit Exceeded")!=-1){
+                    if(info['error']['message'].indexOf("Daily Limit Exceeded")!=-1||info['error']['message'].indexOf('billing')!=-1){
                         writeLog(info['error']['message'],'process','append',0);
                         key_index++;
                         if(key_index>=googlekey.length){
@@ -552,7 +566,7 @@ function getSeedID(seeds)
     request({
         url:fbmain+seeds+'?fields=id,name&access_token='+fbkey,
         //url:fbmain+'?ids='+seeds+'&fields=id,name&access_token='+fbkey,
-        timeout:10000
+        timeout:60000
     },(err,res,body)=>{
         if(!err&&res.statusCode===200){
             if(typeof body==="undefined"||body==""){
@@ -717,7 +731,7 @@ function insertSeed(id,name,fin){
         else{
             if(error){
                 console.log("[insertSeed] error:"+error.code);
-                if(error.code.indexOf('TIMEDOUT')!=-1){
+                if(error.code.indexOf('TIMEDOUT')!=-1||error.code.indexOf('ECONNRESET')!=-1){
                     retryNum++;   
                     if(retryNum<limit_retry){
                         setTimeout(function(){

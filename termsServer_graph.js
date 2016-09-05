@@ -34,12 +34,13 @@ var count_seeds=0;
 var old_seeds=0;
 var new_seeds=0;
 
-var currentr_uncaught_index=0;
+var currentr_uncaught_index_en=0;
+var currentr_uncaught_index_noten=0;
 
 var retryNum=0;
 var socket_num=0;
 /*-----------init seed, reading setting--------------*/
-var service1 = JSON.parse(fs.readFileSync('./service/google_server.setting'));
+var service1 = JSON.parse(fs.readFileSync('./service/graph_termserver.setting'));
 
 var apiip = service1['termServerip'];
 var apiport = service1['termServerport'];
@@ -59,34 +60,32 @@ var search_term="";
 var key_index=0;
 var terms_index=0;
 
-var read_flag=0;//to represent all config file have been read
 //--read data--
 var job = new CronJob({
     cronTime:writeidInterval,
     onTick:function(){
-        if(read_flag>=5){
-            console.log('Recording terms status...');
-            writeTerms2file();
-        }
+        console.log('Recording terms status...');
+        writeTerms2file();
     },
     start:false,
     timeZone:'Asia/Taipei'
 });
-job.start();
+
 //--detect expire term --
 var trace_term = new CronJob({
     cronTime:detectInterval,
     onTick:function(){
         detectExpireTerm();
         if(uncaught_terms.length<perReadTermsNum/2){
-            ReadTerms('uncaught','not_en',search_terms_filename,'',()=>{
+            var lan='not_en';
+            ReadTerms('uncaught',lan,search_terms_filename,'',()=>{
             });
         }
     },
     start:false,
     timeZone:'Asia/Taipei'
 });
-trace_term.start();
+
 
 //--server process--
 process.on('SIGINT', function () {
@@ -100,23 +99,20 @@ process.on('SIGTERM', function () {
     job.stop();
     process.exit(0);
 });
-server.listen(apiport,apiip,function(){
-    console.log("[Server start] ["+new Date()+"] http work at "+apiip+":"+apiport);
-});
+
 //----------------
 
-ReadTWaddress(tw_address_filename);
-ReadTerms('caught','en',search_terms_filename,'',()=>{
-    ReadTerms('uncaught','en',search_terms_filename,'',()=>{
-        console.log('uncaught_terms_en:'+uncaught_terms_en.length+' caught_terms_en:'+caught_terms_en.length);
-    });
-
-});
 ReadTerms('caught','not_en',search_terms_filename,'',()=>{
     ReadTerms('uncaught','not_en',search_terms_filename,'',()=>{
-        console.log('uncaught_terms:'+uncaught_terms.length+' caught_terms:'+caught_terms.length);
+        console.log('[not_en] uncaught_terms:'+uncaught_terms.length+' caught_terms:'+caught_terms.length);
+        server.listen(apiport,apiip,function(){
+            console.log("[Server start] ["+new Date()+"] http work at "+apiip+":"+apiport);
+        });
+        trace_term.start();
+        job.start();
     });
 });
+
 
 
 //----------------
@@ -199,39 +195,45 @@ function writeLog(msg,action)
     });
 }
 function ReadTerms(type,lan,filename,newf,fin){
-    var index_cnt=0;
+    var index_cnt=0,to_index=0;
+    var line_cnt=0;
+    var dir;
+    if(type=='uncaught'){
+        if(lan=='en'){
+            to_index = currentr_uncaught_index_en+perReadTermsNum;
+            index_cnt = currentr_uncaught_index_en;
+        }
+        else if(lan=='not_en'){
+            to_index = currentr_uncaught_index_noten+perReadTermsNum;
+            index_cnt = currentr_uncaught_index_noten;
+        }
+    }
+
     var options = {
         //encoding: 'utf8',
         skipEmptyLines:false
     }
+
     if(newf==""){
-        filename = filename+lan+'/'+type;
+        dir = filename+lan+'/'+type;
     }
     else{
-        filename = filename+lan+'/'+newf;
+        dir = filename+lan+'/'+newf;
     }
-
-    var lr = new LineByLineReader(filename,options);
+    console.log('Read ['+dir+']');
+    var lr = new LineByLineReader(dir,options);
     iconv.skipDecodeWarning = true;
     lr.on('error', function (err) {
         // 'err' contains error object
         console.log("error:"+err);
     });
     lr.on('line', function (line) {
-        //console.log(line);
-        if(index_cnt==(perReadTermsNum+currentr_uncaught_index)){
-            index_cnt++;
-            currentr_uncaught_index+=perReadTermsNum;
-            console.log("index_cnt:"+index_cnt+" perReadTermsNum:"+perReadTermsNum);
-            console.log("currentr_uncaught_index:"+currentr_uncaught_index);
-            index_cnt=-1;
-            lr.close();
-        }
-        else if(index_cnt!=-1){
-            if(line!='\n'){
-                index_cnt++;
+        if(type=='uncaught'){
+            if(uncaught_terms.length==perReadTermsNum){
+                console.log('reach:'+perReadTermsNum);
+                lr.close();
             }
-            if(line!='\n'&&(index_cnt>=currentr_uncaught_index)){
+            else{
                 var ischt = line.match(/[\u4e00-\u9fa5]/ig);
                 if(ischt!=null){
                     lan="not_en";
@@ -244,6 +246,8 @@ function ReadTerms(type,lan,filename,newf,fin){
                     if(type=="uncaught"){
                         if(uncaught_terms.indexOf(line)==-1&&caught_terms.indexOf(line)==-1){
                             uncaught_terms.push(line);
+                            //console.log('uncaught_terms.length:'+uncaught_terms.length);
+                            //console.log('line cnt:'+line_cnt+' to_index:'+to_index);
                         }
 
                     }
@@ -267,12 +271,34 @@ function ReadTerms(type,lan,filename,newf,fin){
                 }
             }
         }
-
-
+        else if(type=='caught'){
+            if(lan=='not_en'){
+                if(caught_terms.indexOf(line)==-1){
+                    caught_terms.push(line);
+                }
+            }
+            else if(lan=='en'){
+                if(caught_terms_en.indexOf(line)==-1){
+                    caught_terms_en.push(line);
+                }
+            }
+        }
     });
     lr.on('end', function () {
         // All lines are read, file is closed now.
-        read_flag++;
+        console.log('Read ['+dir+'] done');
+        if(type=='uncaught'){
+            if(lan=='en'){
+                console.log('['+lan+']['+type+']from index:'+currentr_uncaught_index_en+' to index:'+to_index);
+                currentr_uncaught_index_en=to_index;
+                console.log("next start index:"+currentr_uncaught_index_en);
+            }
+            else if(lan=='not_en'){
+                console.log('['+lan+']['+type+']from index:'+currentr_uncaught_index_noten+' to index:'+to_index);
+                currentr_uncaught_index_noten=to_index;
+                console.log("next start index:"+currentr_uncaught_index_noten);
+            }
+        }
         fin();
     });
 
@@ -346,7 +372,6 @@ function ReadTWaddress(tw_address_filename){
         map_tw_address.set("臺灣","Taiwan");
         map_tw_address.set("Taiwan","臺灣");
         console.log("read map_tw_address done");
-        read_flag++;
     });
 
 }
@@ -593,13 +618,13 @@ function updateTerm(terms,fin)
 app.get('/'+server_name+'/:key/v1.0/:action(search|update|insert|delete|show|insertFile)/:lan(en|not_en)?',function(req,res){
     var key = req.params.key;
     var action = req.params.action;
+    var terms = req.query.terms;//allow mutiple terms=> ter1||ter2||...
     /*deprecated, only allow read terms from 'uncaught' file, there's an index to record current read line.
     var filename = req.query.filename;//for localhost insertFile(terms)
     */
     var filename='uncaught';
     var lan = req.params.lan;//for localhost insertFile(terms)
-
-    if(key!=termKey||read_flag<5||typeof action==="undefined"||(typeof terms==="undefined"&&(action!="show"&&action!="insertFile"))){
+    if(key!=termKey||typeof action==="undefined"||(typeof terms==="undefined"&&(action!="show"&&action!="insertFile"))){
         res.send("illegal request");
         return;
     }
@@ -667,7 +692,7 @@ app.get('/'+server_name+'/:key/v1.0/getTerms/:lan(en|not_en)?',function(req,res)
     var key = req.params.key;
     var lan = req.params.lan;
     var num = req.query.num;
-    if(key!=termKey||read_flag<5){
+    if(key!=termKey){
         res.send("illegal request");
         return;
     }
@@ -738,7 +763,7 @@ app.get('/'+server_name+'/:key/v1.0/status/:action(update)',function(req,res){
     var key = req.params.key;
     var action = req.params.action;
     var term = req.query.term;
-    if(key!=termKey||read_flag<5){
+    if(key!=termKey){
         res.send("illegal request");
         return;
     }
